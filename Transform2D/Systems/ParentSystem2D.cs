@@ -16,6 +16,7 @@ namespace NSprites
     /// </summary>
     [BurstCompile]
     [RequireMatchingQueriesForUpdate]
+    [WorldSystemFilter(WorldSystemFilterFlags.Default | WorldSystemFilterFlags.Editor)]
     [UpdateInGroup(typeof(TransformSystemGroup))]
     public partial struct ParentSystem2D : ISystem
     {
@@ -24,10 +25,18 @@ namespace NSprites
         private EntityQuery mExistingParentsQuery;
         private EntityQuery mDeletedParentsQuery;
 
-        private static readonly ProfilerMarker kProfileDeletedParents = new ProfilerMarker("ParentSystem.DeletedParents");
-        private static readonly ProfilerMarker kProfileRemoveParents  = new ProfilerMarker("ParentSystem.RemoveParents");
-        private static readonly ProfilerMarker kProfileChangeParents  = new ProfilerMarker("ParentSystem.ChangeParents");
-        private static readonly ProfilerMarker kProfileNewParents     = new ProfilerMarker("ParentSystem.NewParents");
+        private static readonly ProfilerMarker kProfileDeletedParents = new ProfilerMarker(
+            "ParentSystem.DeletedParents"
+        );
+        private static readonly ProfilerMarker kProfileRemoveParents = new ProfilerMarker(
+            "ParentSystem.RemoveParents"
+        );
+        private static readonly ProfilerMarker kProfileChangeParents = new ProfilerMarker(
+            "ParentSystem.ChangeParents"
+        );
+        private static readonly ProfilerMarker kProfileNewParents = new ProfilerMarker(
+            "ParentSystem.NewParents"
+        );
 
         private BufferLookup<Child2D> childLookupRo;
         private BufferLookup<Child2D> childLookupRw;
@@ -35,7 +44,6 @@ namespace NSprites
         private ComponentTypeHandle<PreviousParent2D> previousParentTypeHandleRW;
         private EntityTypeHandle entityTypeHandle;
         private ComponentTypeHandle<Parent2D> parentTypeHandleRO;
-
 
         private int FindChildIndex(DynamicBuffer<Child2D> children, Entity entity)
         {
@@ -48,19 +56,24 @@ namespace NSprites
             throw new InvalidOperationException("Child entity not in parent");
         }
 
-
-        private void RemoveChildFromParent(ref SystemState state, Entity childEntity, Entity parentEntity)
+        private void RemoveChildFromParent(
+            ref SystemState state,
+            Entity childEntity,
+            Entity parentEntity
+        )
         {
             if (!state.EntityManager.HasComponent<Child2D>(parentEntity))
                 return;
 
-            DynamicBuffer<Child2D> children   = state.EntityManager.GetBuffer<Child2D>(parentEntity);
-            int             childIndex = FindChildIndex(children, childEntity);
+            DynamicBuffer<Child2D> children = state.EntityManager.GetBuffer<Child2D>(parentEntity);
+            int childIndex = FindChildIndex(children, childEntity);
             children.RemoveAt(childIndex);
             if (children.Length == 0)
             {
-                state.EntityManager.RemoveComponent(parentEntity, ComponentType.FromTypeIndex(
-                    TypeManager.GetTypeIndex<Child2D>()));
+                state.EntityManager.RemoveComponent(
+                    parentEntity,
+                    ComponentType.FromTypeIndex(TypeManager.GetTypeIndex<Child2D>())
+                );
             }
         }
 
@@ -69,33 +82,48 @@ namespace NSprites
         {
             public NativeParallelMultiHashMap<Entity, Entity>.ParallelWriter ParentChildrenToAdd;
             public NativeParallelMultiHashMap<Entity, Entity>.ParallelWriter ParentChildrenToRemove;
-            public NativeParallelHashSet<Entity>.ParallelWriter ChildParentToRemove;   // Children that have a Parent component, but that parent does not exist (deleted before ParentSystem runs)
+            public NativeParallelHashSet<Entity>.ParallelWriter ChildParentToRemove; // Children that have a Parent component, but that parent does not exist (deleted before ParentSystem runs)
             public NativeParallelHashMap<Entity, int>.ParallelWriter UniqueParents;
             public ComponentTypeHandle<PreviousParent2D> PreviousParentTypeHandle;
             public EntityStorageInfoLookup EntityStorageInfoLookup;
 
-            [ReadOnly] public BufferLookup<Child2D> ChildLookup;
+            [ReadOnly]
+            public BufferLookup<Child2D> ChildLookup;
 
-            [ReadOnly] public ComponentTypeHandle<Parent2D> ParentTypeHandle;
-            [ReadOnly] public EntityTypeHandle EntityTypeHandle;
+            [ReadOnly]
+            public ComponentTypeHandle<Parent2D> ParentTypeHandle;
+
+            [ReadOnly]
+            public EntityTypeHandle EntityTypeHandle;
             public uint LastSystemVersion;
 
-            public void Execute(in ArchetypeChunk chunk, int unfilteredChunkIndex, bool useEnabledMask, in v128 chunkEnabledMask)
+            public void Execute(
+                in ArchetypeChunk chunk,
+                int unfilteredChunkIndex,
+                bool useEnabledMask,
+                in v128 chunkEnabledMask
+            )
             {
                 Assert.IsFalse(useEnabledMask);
 
-                if (chunk.DidChange(ref ParentTypeHandle, LastSystemVersion) ||
-                    chunk.DidChange(ref PreviousParentTypeHandle, LastSystemVersion))
+                if (
+                    chunk.DidChange(ref ParentTypeHandle, LastSystemVersion)
+                    || chunk.DidChange(ref PreviousParentTypeHandle, LastSystemVersion)
+                )
                 {
-                    NativeArray<PreviousParent2D> chunkPreviousParents = chunk.GetNativeArray(ref PreviousParentTypeHandle);
-                    NativeArray<Parent2D>         chunkParents         = chunk.GetNativeArray(ref ParentTypeHandle);
-                    NativeArray<Entity>           chunkEntities        = chunk.GetNativeArray(EntityTypeHandle);
+                    NativeArray<PreviousParent2D> chunkPreviousParents = chunk.GetNativeArray(
+                        ref PreviousParentTypeHandle
+                    );
+                    NativeArray<Parent2D> chunkParents = chunk.GetNativeArray(ref ParentTypeHandle);
+                    NativeArray<Entity> chunkEntities = chunk.GetNativeArray(EntityTypeHandle);
 
-                    for (int j = 0, chunkEntityCount = chunk.Count; j < chunkEntityCount; j++) {
-                        if (chunkParents[j].Value == chunkPreviousParents[j].Value) continue;
-                        
-                        Entity childEntity          = chunkEntities[j];
-                        Entity parentEntity         = chunkParents[j].Value;
+                    for (int j = 0, chunkEntityCount = chunk.Count; j < chunkEntityCount; j++)
+                    {
+                        if (chunkParents[j].Value == chunkPreviousParents[j].Value)
+                            continue;
+
+                        Entity childEntity = chunkEntities[j];
+                        Entity parentEntity = chunkParents[j].Value;
                         Entity previousParentEntity = chunkPreviousParents[j].Value;
 
                         if (!EntityStorageInfoLookup.Exists(parentEntity))
@@ -115,10 +143,7 @@ namespace NSprites
                             UniqueParents.TryAdd(previousParentEntity, 0);
                         }
 
-                        chunkPreviousParents[j] = new PreviousParent2D
-                        {
-                            Value = parentEntity
-                        };
+                        chunkPreviousParents[j] = new PreviousParent2D { Value = parentEntity };
                     }
                 }
             }
@@ -127,8 +152,11 @@ namespace NSprites
         [BurstCompile]
         private struct FindMissingChild : IJob
         {
-            [ReadOnly] public NativeParallelHashMap<Entity, int> UniqueParents;
-            [ReadOnly] public BufferLookup<Child2D> ChildLookup;
+            [ReadOnly]
+            public NativeParallelHashMap<Entity, int> UniqueParents;
+
+            [ReadOnly]
+            public BufferLookup<Child2D> ChildLookup;
             public NativeList<Entity> ParentsMissingChild;
 
             public void Execute()
@@ -148,9 +176,14 @@ namespace NSprites
         [BurstCompile]
         private struct FixupChangedChildren : IJob
         {
-            [ReadOnly] public NativeParallelMultiHashMap<Entity, Entity> ParentChildrenToAdd;
-            [ReadOnly] public NativeParallelMultiHashMap<Entity, Entity> ParentChildrenToRemove;
-            [ReadOnly] public NativeParallelHashMap<Entity, int> UniqueParents;
+            [ReadOnly]
+            public NativeParallelMultiHashMap<Entity, Entity> ParentChildrenToAdd;
+
+            [ReadOnly]
+            public NativeParallelMultiHashMap<Entity, Entity> ParentChildrenToRemove;
+
+            [ReadOnly]
+            public NativeParallelHashMap<Entity, int> UniqueParents;
 
             public BufferLookup<Child2D> ChildLookup;
 
@@ -159,7 +192,6 @@ namespace NSprites
             {
                 throw new InvalidOperationException("Child entity not in parent");
             }
-
 
             private int FindChildIndex(DynamicBuffer<Child2D> children, Entity entity)
             {
@@ -173,30 +205,38 @@ namespace NSprites
                 return -1;
             }
 
-
             private void RemoveChildrenFromParent(Entity parent, DynamicBuffer<Child2D> children)
             {
-                if (ParentChildrenToRemove.TryGetFirstValue(parent, out Entity child, out NativeParallelMultiHashMapIterator<Entity> it))
+                if (
+                    ParentChildrenToRemove.TryGetFirstValue(
+                        parent,
+                        out Entity child,
+                        out NativeParallelMultiHashMapIterator<Entity> it
+                    )
+                )
                 {
                     do
                     {
                         int childIndex = FindChildIndex(children, child);
                         children.RemoveAt(childIndex);
-                    }
-                    while (ParentChildrenToRemove.TryGetNextValue(out child, ref it));
+                    } while (ParentChildrenToRemove.TryGetNextValue(out child, ref it));
                 }
             }
 
-
             private void AddChildrenToParent(Entity parent, DynamicBuffer<Child2D> children)
             {
-                if (ParentChildrenToAdd.TryGetFirstValue(parent, out Entity child, out NativeParallelMultiHashMapIterator<Entity> it))
+                if (
+                    ParentChildrenToAdd.TryGetFirstValue(
+                        parent,
+                        out Entity child,
+                        out NativeParallelMultiHashMapIterator<Entity> it
+                    )
+                )
                 {
                     do
                     {
                         children.Add(new Child2D() { Value = child });
-                    }
-                    while (ParentChildrenToAdd.TryGetNextValue(out child, ref it));
+                    } while (ParentChildrenToAdd.TryGetNextValue(out child, ref it));
                 }
             }
 
@@ -228,30 +268,32 @@ namespace NSprites
             entityTypeHandle = state.GetEntityTypeHandle();
 
             EntityQueryBuilder builder0 = new EntityQueryBuilder(Allocator.Temp)
-                                         .WithAll<Parent2D>()
-                                         .WithNone<PreviousParent2D>()
-                                         .WithOptions(EntityQueryOptions.FilterWriteGroup);
+                .WithAll<Parent2D>()
+                .WithNone<PreviousParent2D>()
+                .WithOptions(EntityQueryOptions.FilterWriteGroup);
             mNewParentsQuery = state.GetEntityQuery(builder0);
 
             EntityQueryBuilder builder1 = new EntityQueryBuilder(Allocator.Temp)
-                                         .WithAllRW<PreviousParent2D>()
-                                         .WithNone<Parent2D>()
-                                         .WithOptions(EntityQueryOptions.FilterWriteGroup);
+                .WithAllRW<PreviousParent2D>()
+                .WithNone<Parent2D>()
+                .WithOptions(EntityQueryOptions.FilterWriteGroup);
             mRemovedParentsQuery = state.GetEntityQuery(builder1);
 
             EntityQueryBuilder builder2 = new EntityQueryBuilder(Allocator.Temp)
-                                         .WithAll<Parent2D>()
-                                         .WithAllRW<PreviousParent2D>()
-                                         .WithOptions(EntityQueryOptions.FilterWriteGroup);
+                .WithAll<Parent2D>()
+                .WithAllRW<PreviousParent2D>()
+                .WithOptions(EntityQueryOptions.FilterWriteGroup);
             mExistingParentsQuery = state.GetEntityQuery(builder2);
             mExistingParentsQuery.ResetFilter();
             mExistingParentsQuery.AddChangedVersionFilter(ComponentType.ReadWrite<Parent2D>());
-            mExistingParentsQuery.AddChangedVersionFilter(ComponentType.ReadWrite<PreviousParent2D>());
+            mExistingParentsQuery.AddChangedVersionFilter(
+                ComponentType.ReadWrite<PreviousParent2D>()
+            );
 
             EntityQueryBuilder builder3 = new EntityQueryBuilder(Allocator.Temp)
-                                         .WithAllRW<Child2D>()
-                                         .WithNone<LocalToWorld2D>()
-                                         .WithOptions(EntityQueryOptions.FilterWriteGroup);
+                .WithAllRW<Child2D>()
+                .WithNone<LocalToWorld2D>()
+                .WithOptions(EntityQueryOptions.FilterWriteGroup);
             mDeletedParentsQuery = state.GetEntityQuery(builder3);
         }
 
@@ -261,18 +303,24 @@ namespace NSprites
             if (mNewParentsQuery.IsEmptyIgnoreFilter)
                 return;
 
-            state.EntityManager.AddComponent(mNewParentsQuery, ComponentType.FromTypeIndex(
-                TypeManager.GetTypeIndex<PreviousParent2D>()));
+            state.EntityManager.AddComponent(
+                mNewParentsQuery,
+                ComponentType.FromTypeIndex(TypeManager.GetTypeIndex<PreviousParent2D>())
+            );
         }
-
 
         private void UpdateRemoveParents(ref SystemState state)
         {
             if (mRemovedParentsQuery.IsEmptyIgnoreFilter)
                 return;
 
-            NativeArray<Entity>         childEntities   = mRemovedParentsQuery.ToEntityArray(state.WorldUnmanaged.UpdateAllocator.ToAllocator);
-            NativeArray<PreviousParent2D> previousParents = mRemovedParentsQuery.ToComponentDataArray<PreviousParent2D>(state.WorldUnmanaged.UpdateAllocator.ToAllocator);
+            NativeArray<Entity> childEntities = mRemovedParentsQuery.ToEntityArray(
+                state.WorldUnmanaged.UpdateAllocator.ToAllocator
+            );
+            NativeArray<PreviousParent2D> previousParents =
+                mRemovedParentsQuery.ToComponentDataArray<PreviousParent2D>(
+                    state.WorldUnmanaged.UpdateAllocator.ToAllocator
+                );
 
             for (int i = 0; i < childEntities.Length; i++)
             {
@@ -282,10 +330,11 @@ namespace NSprites
                 RemoveChildFromParent(ref state, childEntity, previousParentEntity);
             }
 
-            state.EntityManager.RemoveComponent(mRemovedParentsQuery, ComponentType.FromTypeIndex(
-                TypeManager.GetTypeIndex<PreviousParent2D>()));
+            state.EntityManager.RemoveComponent(
+                mRemovedParentsQuery,
+                ComponentType.FromTypeIndex(TypeManager.GetTypeIndex<PreviousParent2D>())
+            );
         }
-
 
         private void UpdateChangeParents(ref SystemState state)
         {
@@ -300,10 +349,24 @@ namespace NSprites
             // 2. Get (Parent,Child) to add
             // 3. Get unique Parent change list
             // 4. Set PreviousParent to new Parent
-            NativeParallelMultiHashMap<Entity, Entity> parentChildrenToAdd    = new NativeParallelMultiHashMap<Entity, Entity>(count, state.WorldUnmanaged.UpdateAllocator.ToAllocator);
-            NativeParallelMultiHashMap<Entity, Entity> parentChildrenToRemove = new NativeParallelMultiHashMap<Entity, Entity>(count, state.WorldUnmanaged.UpdateAllocator.ToAllocator);
-            NativeParallelHashSet<Entity>              childParentToRemove    = new NativeParallelHashSet<Entity>(count, state.WorldUnmanaged.UpdateAllocator.ToAllocator);
-            NativeParallelHashMap<Entity, int>         uniqueParents          = new NativeParallelHashMap<Entity, int>(count, state.WorldUnmanaged.UpdateAllocator.ToAllocator);
+            NativeParallelMultiHashMap<Entity, Entity> parentChildrenToAdd =
+                new NativeParallelMultiHashMap<Entity, Entity>(
+                    count,
+                    state.WorldUnmanaged.UpdateAllocator.ToAllocator
+                );
+            NativeParallelMultiHashMap<Entity, Entity> parentChildrenToRemove =
+                new NativeParallelMultiHashMap<Entity, Entity>(
+                    count,
+                    state.WorldUnmanaged.UpdateAllocator.ToAllocator
+                );
+            NativeParallelHashSet<Entity> childParentToRemove = new NativeParallelHashSet<Entity>(
+                count,
+                state.WorldUnmanaged.UpdateAllocator.ToAllocator
+            );
+            NativeParallelHashMap<Entity, int> uniqueParents = new NativeParallelHashMap<
+                Entity,
+                int
+            >(count, state.WorldUnmanaged.UpdateAllocator.ToAllocator);
 
             parentTypeHandleRO.Update(ref state);
             previousParentTypeHandleRW.Update(ref state);
@@ -322,15 +385,22 @@ namespace NSprites
                 EntityTypeHandle = entityTypeHandle,
                 LastSystemVersion = state.LastSystemVersion
             };
-            JobHandle gatherChangedParentsJobHandle = gatherChangedParentsJob.ScheduleParallel(mExistingParentsQuery, state.Dependency);
+            JobHandle gatherChangedParentsJobHandle = gatherChangedParentsJob.ScheduleParallel(
+                mExistingParentsQuery,
+                state.Dependency
+            );
             gatherChangedParentsJobHandle.Complete();
 
             // Remove Parent components that are not valid
-            NativeArray<Entity> arrayToRemove = childParentToRemove.ToNativeArray(state.WorldUnmanaged.UpdateAllocator.ToAllocator);
+            NativeArray<Entity> arrayToRemove = childParentToRemove.ToNativeArray(
+                state.WorldUnmanaged.UpdateAllocator.ToAllocator
+            );
             state.EntityManager.RemoveComponent(arrayToRemove, ComponentType.ReadWrite<Parent2D>());
 
             // 5. (Structural change) Add any missing Child to Parents
-            NativeList<Entity> parentsMissingChild = new NativeList<Entity>(state.WorldUnmanaged.UpdateAllocator.ToAllocator);
+            NativeList<Entity> parentsMissingChild = new NativeList<Entity>(
+                state.WorldUnmanaged.UpdateAllocator.ToAllocator
+            );
             childLookupRo.Update(ref state);
             FindMissingChild findMissingChildJob = new FindMissingChild
             {
@@ -341,7 +411,9 @@ namespace NSprites
             JobHandle findMissingChildJobHandle = findMissingChildJob.Schedule();
             findMissingChildJobHandle.Complete();
 
-            ComponentTypeSet componentsToAdd = new ComponentTypeSet(ComponentType.ReadWrite<Child2D>());
+            ComponentTypeSet componentsToAdd = new ComponentTypeSet(
+                ComponentType.ReadWrite<Child2D>()
+            );
             state.EntityManager.AddComponent(parentsMissingChild.AsArray(), componentsToAdd);
 
             // 6. Get Child[] for each unique Parent
@@ -362,10 +434,14 @@ namespace NSprites
             NativeArray<Entity> parents = uniqueParents.GetKeyArray(Allocator.Temp);
             foreach (Entity parentEntity in parents)
             {
-                DynamicBuffer<Child2D> children = state.EntityManager.GetBuffer<Child2D>(parentEntity);
+                DynamicBuffer<Child2D> children = state.EntityManager.GetBuffer<Child2D>(
+                    parentEntity
+                );
                 if (children.Length == 0)
                 {
-                    ComponentTypeSet componentsToRemove = new ComponentTypeSet(ComponentType.ReadWrite<Child2D>());
+                    ComponentTypeSet componentsToRemove = new ComponentTypeSet(
+                        ComponentType.ReadWrite<Child2D>()
+                    );
                     state.EntityManager.RemoveComponent(parentEntity, componentsToRemove);
                 }
             }
@@ -374,21 +450,31 @@ namespace NSprites
         [BurstCompile]
         private struct GatherChildEntities : IJob
         {
-            [ReadOnly] public NativeArray<Entity> Parents;
+            [ReadOnly]
+            public NativeArray<Entity> Parents;
             public NativeList<Entity> Children;
-            [ReadOnly] public BufferLookup<Child2D> ChildLookup;
-            [ReadOnly] public ComponentLookup<Parent2D> ParentFromEntity;
+
+            [ReadOnly]
+            public BufferLookup<Child2D> ChildLookup;
+
+            [ReadOnly]
+            public ComponentLookup<Parent2D> ParentFromEntity;
 
             public void Execute()
             {
                 for (int i = 0; i < Parents.Length; i++)
                 {
-                    Entity             parentEntity        = Parents[i];
-                    NativeArray<Child2D> childEntitiesSource = ChildLookup[parentEntity].AsNativeArray();
+                    Entity parentEntity = Parents[i];
+                    NativeArray<Child2D> childEntitiesSource = ChildLookup[
+                        parentEntity
+                    ].AsNativeArray();
                     for (int j = 0; j < childEntitiesSource.Length; j++)
                     {
                         Entity childEntity = childEntitiesSource[j].Value;
-                        if (ParentFromEntity.TryGetComponent(childEntity, out Parent2D parent) && parent.Value == parentEntity)
+                        if (
+                            ParentFromEntity.TryGetComponent(childEntity, out Parent2D parent)
+                            && parent.Value == parentEntity
+                        )
                         {
                             Children.Add(childEntitiesSource[j].Value);
                         }
@@ -397,15 +483,17 @@ namespace NSprites
             }
         }
 
-
-
         private void UpdateDeletedParents(ref SystemState state)
         {
             if (mDeletedParentsQuery.IsEmptyIgnoreFilter)
                 return;
 
-            NativeArray<Entity> previousParents = mDeletedParentsQuery.ToEntityArray(state.WorldUnmanaged.UpdateAllocator.ToAllocator);
-            NativeList<Entity>  childEntities   = new NativeList<Entity>(state.WorldUnmanaged.UpdateAllocator.ToAllocator);
+            NativeArray<Entity> previousParents = mDeletedParentsQuery.ToEntityArray(
+                state.WorldUnmanaged.UpdateAllocator.ToAllocator
+            );
+            NativeList<Entity> childEntities = new NativeList<Entity>(
+                state.WorldUnmanaged.UpdateAllocator.ToAllocator
+            );
 
             childLookupRo.Update(ref state);
             parentFromEntityRO.Update(ref state);
@@ -424,9 +512,12 @@ namespace NSprites
                 new ComponentTypeSet(
                     ComponentType.FromTypeIndex(TypeManager.GetTypeIndex<Parent2D>()),
                     ComponentType.FromTypeIndex(TypeManager.GetTypeIndex<PreviousParent2D>())
-                ));
-            state.EntityManager.RemoveComponent(mDeletedParentsQuery, ComponentType.FromTypeIndex(
-                TypeManager.GetTypeIndex<Child2D>()));
+                )
+            );
+            state.EntityManager.RemoveComponent(
+                mDeletedParentsQuery,
+                ComponentType.FromTypeIndex(TypeManager.GetTypeIndex<Child2D>())
+            );
         }
 
         /// <inheritdoc cref="ISystem.OnUpdate"/>
