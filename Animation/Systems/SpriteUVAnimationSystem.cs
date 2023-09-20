@@ -49,9 +49,10 @@ namespace NSprites
                     animationTimer.value = Time + nextFrameDuration;
 
                     var frameSize = new float2(animData.UVAtlas.xy / animData.GridSize);
+                    // y should be inverted because 0.0 in UV starts from left bottom point but we assume 1st frame is at left up point
                     var framePosition = new int2(
                         frameIndex.value % animData.GridSize.x,
-                        frameIndex.value / animData.GridSize.x
+                        animData.GridSize.y - 1 - frameIndex.value / animData.GridSize.x
                     );
                     uvAtlas = new UVAtlas
                     {
