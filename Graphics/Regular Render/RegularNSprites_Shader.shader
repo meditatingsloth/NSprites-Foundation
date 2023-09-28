@@ -1,4 +1,4 @@
-﻿Shader "Universal Render Pipeline/2D/SimpleSpriteShader"
+﻿Shader "NSprites/Default"
 {
     Properties
     {

@@ -5,6 +5,7 @@ using Unity.Entities;
 namespace NSprites
 {
     [WorldSystemFilter(WorldSystemFilterFlags.Editor | WorldSystemFilterFlags.Default)]
+    [UpdateInGroup(typeof(InitializationSystemGroup))]
     public partial class RegisterRenderersSystem : SystemBase
     {
         private EntityQuery _renderArchetypeToRegisterQuery;
@@ -73,6 +74,8 @@ namespace NSprites
             Register(_renderArchetypeToRegisterQuery.ToEntityArray(Allocator.Temp));
 
             EntityManager.RemoveComponent<SpriteRenderDataToRegister>(_renderArchetypeToRegisterQuery);
+
+            Dependency.Complete();
         }
     }
 }
