@@ -12,7 +12,7 @@ namespace NSprites
         private readonly RefRW<FrameIndex> _frameIndex;
         private readonly RefRO<AnimationSetLink> _animationSetLink;
 
-        public void SetAnimation(int toAnimationIndex, in double worldTime)
+        public void SetAnimation(int toAnimationIndex, in double worldTime, bool isOneTime)
         {
             // find animation by animation ID
             ref var animSet = ref _animationSetLink.ValueRO.value.Value;
@@ -38,6 +38,8 @@ namespace NSprites
                 _frameIndex.ValueRW.value = animData.FrameDurations.Length - 1;
                 _animationTimer.ValueRW.value = worldTime;
             }
+
+            _animationTimer.ValueRW.isOneTime = isOneTime;
         }
 
         public void SetToFrame(int frameIndex, in double worldTime)

@@ -31,6 +31,13 @@ namespace NSprites
                 {
                     ref var animData = ref animationSet.value.Value[animationIndex.value];
                     var frameCount = animData.FrameDurations.Length;
+
+                    if (frameIndex.value + 1 >= frameCount && animationTimer.isOneTime)
+                    {
+                        animationTimer.isComplete = true;
+                        return;
+                    }
+
                     frameIndex.value = (frameIndex.value + 1) % frameCount;
                     var nextFrameDuration = animData.FrameDurations[frameIndex.value];
 
